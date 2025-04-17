@@ -1,0 +1,44 @@
+name: Build Xiao BLE Mouse UF2
+
+on:
+  push:
+    branches: [ main ]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v3
+
+    - name: Install Zephyr SDK & Nordic Toolchain
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y git python3-pip python3-venv cmake ninja-build gperf \
+          dfu-util device-tree-compiler wget xz-utils file
+        # Install Zephyr's west
+        python3 -m pip install --upgrade west
+
+    - name: Fetch Zephyr + modules
+      run: |
+        west init -l .
+        west update
+        west zephyr-export
+
+    - name: Build for Xiao BLE
+      working-directory: ${{ github.workspace }}
+      run: |
+        west build -b xiao_ble .
+
+    - name: Convert to UF2
+      working-directory: ${{ github.workspace }}
+      run: |
+        wget -qO uf2conv.py https://raw.githubusercontent.com/microsoft/uf2/master/utils/uf2conv.py
+        wget -qO uf2families.json https://raw.githubusercontent.com/microsoft/uf2/master/utils/uf2conv.py/../uf2families.json
+        python3 uf2conv.py build/zephyr/zephyr.hex -c -o build/zephyr/xiao_mouse.uf2
+
+    - name: Upload UF2 Artifact
+      uses: actions/upload-artifact@v3
+      with:
+        name: xiao_mouse.uf2
+        path: build/zephyr/xiao_mouse.uf2
